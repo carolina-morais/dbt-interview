@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: monzo_warehouse
+    database: analytics-take-home-test
+    schema: monzo_datawarehouse  
+    tables:
+      - name: account_closed
+      - name: account_created
+      - name: account_reopened
+      - name: account_transactions
