@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: user_activity_by_day
-    description: This table records daily activity for users with open accounts.
+    description: This table records daily activity for users.
     columns:
       - name: surrogate_key
         description: A generated unique ID based on user_id_hashed and date_day.
@@ -40,7 +40,7 @@ unit_tests:
         is_incremental: true  # Force the test to think it's an incremental run
       vars:
         start_date: "2024-11-01"  # Incremental date from which we process new data
-        end_date: "2024-11-02" 
+        end_date: "2024-11-02" # End of incremental window
     given:
       # Mock dim_date with a few dates
       - input: ref('dim_date')
@@ -57,11 +57,8 @@ unit_tests:
       - input: ref('dim_account')
         format: dict
         rows:
-          # user_1 has an open account covering these dates
           - {user_id_hashed: user_1, account_id_hashed: acct_1, status: 'Opened', valid_from: '2024-10-30 00:00:00', valid_to: '9999-12-31 23:59:59'}
-          # user_2 has an open account starting on 2024-11-01
           - {user_id_hashed: user_2, account_id_hashed: acct_2, status: 'Opened', valid_from: '2024-11-01 00:00:00', valid_to: '9999-12-31 23:59:59'}
-
           - {user_id_hashed: user_3, account_id_hashed: acct_3, status: 'Opened', valid_from: '2024-09-01 00:00:00', valid_to: '9999-12-31 23:59:59'}
           - {user_id_hashed: user_4, account_id_hashed: acct_4, status: 'Opened', valid_from: '2024-09-01 00:00:00', valid_to: '9999-12-31 23:59:59'}
 
@@ -69,12 +66,9 @@ unit_tests:
       - input: ref('stg_account_transactions')
         format: dict
         rows:
-          # Transactions before incremental date
           - {transaction_date: '2024-10-31', account_id_hashed: acct_1, no_of_transactions: 5}
-          # Transactions on and after incremental date
           - {transaction_date: '2024-11-01', account_id_hashed: acct_1, no_of_transactions: 2}
           - {transaction_date: '2024-11-02', account_id_hashed: acct_2, no_of_transactions: 3}
-
           - {transaction_date: '2024-11-02', account_id_hashed: acct_3, no_of_transactions: 2}
 
       # Mock existing incremental table state ("this") to simulate previous run
@@ -91,12 +85,19 @@ unit_tests:
         # We expect to see rows for 2024-11-01 and onward only, because of incremental mode
         - {date_day: '2024-11-01', user_id_hashed: user_1, is_account_open: 1, no_of_transactions: 2, date_of_last_activity_in_last_7_days: '2024-11-01', is_active_in_last_7_days: 1}
         - {date_day: '2024-11-02', user_id_hashed: user_1, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: '2024-11-01', is_active_in_last_7_days: 1}
-        # Note that even though user_2 had no previous activity, now they appear starting from 2024-11-02
+
+        # Note that even though user_2 had no previous activity, now they appear starting from 2024-11-01 with null date_of_last_activity_in_last_7_days as their first transaction was on the 2nd.
         - {date_day: '2024-11-01', user_id_hashed: user_2, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: null, is_active_in_last_7_days: 0}
         - {date_day: '2024-11-02', user_id_hashed: user_2, is_account_open: 1, no_of_transactions: 3, date_of_last_activity_in_last_7_days: '2024-11-02', is_active_in_last_7_days: 1}
 
+        # User 3 has an entry for the 31st, this entry captures that date_of_last_activity_in_last_7_days is recorded as 2024-10-24.
+        # On the 1st this previous date_of_last_activity_in_last_7_days is more than 7 days ago and thus is not rolled forward.
+        # On the 2nd they have another transaction which restarts the date_of_last_activity_in_last_7_days.
         - {date_day: '2024-11-01', user_id_hashed: user_3, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: null, is_active_in_last_7_days: 0}
         - {date_day: '2024-11-02', user_id_hashed: user_3, is_account_open: 1, no_of_transactions: 2, date_of_last_activity_in_last_7_days: '2024-11-02', is_active_in_last_7_days: 1}
 
+        # User 4 has an entry for the 31st, this entry captures that date_of_last_activity_in_last_7_days is recorded as 2024-10-25.
+        # On the 1st this previous date_of_last_activity_in_last_7_days is within 7 days ago and thus it is rolled forward.
+        # On the 2nd they have had no new transactions and 2024-10-25 more than 7 days ago, it not rolled forward.
         - {date_day: '2024-11-01', user_id_hashed: user_4, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: '2024-10-25', is_active_in_last_7_days: 1}
         - {date_day: '2024-11-02', user_id_hashed: user_4, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: null, is_active_in_last_7_days: 0}
