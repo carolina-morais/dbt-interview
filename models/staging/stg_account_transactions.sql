@@ -1,5 +1,5 @@
---interval could be extended to account for late arriving data
-{% set partitions_to_replace = ['current_date','date_sub(current_date, interval 1 day)'] %}
+{# refresh previous 2 days to account for late arriving data. #}
+{% set partitions_to_replace = generate_partitions(var("start_date", generate_start_date(2)), var("end_date", generate_end_date(0)), type='date') %}
 
 {{
   config(
