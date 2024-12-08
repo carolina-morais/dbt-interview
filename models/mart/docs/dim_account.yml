@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: dim_account
+    description: A dimension table providing a historical and current view of account attributes.
+    columns:
+      - name: surrogate_key
+        description: A generated unique ID based on account_id_hashed and valid_from.
+        tests:
+          - unique
+          - not_null
+      - name: account_id_hashed
+        tests:
+          - not_null
+      - name: user_id_hashed
+        tests:
+          - not_null
+      - name: account_type
+      - name: status
+        description: Indicates the nature of the event, Opened, Closed or Reopened.
+        tests:
+          - accepted_values:
+              values:
+                - Opened
+                - Closed
+                - Reopened
+      - name: valid_from
+        description: The start timestamp of the period during which the record attributes were valid. 
+        tests:
+          - not_null
+      - name: valid_to
+        description: The end timestamp of the period during which the record attributes were valid. 
+      - name: is_current
+        description: A boolean indicator showing whether this record is the latest representation of the accounts state (true) or a historical record (false).
+      - name: is_current_description
+        description: A textual explanation clarifying if the record reflects the current state of the account.

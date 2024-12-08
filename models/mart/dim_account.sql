@@ -1,5 +1,6 @@
 {{
   config(
+    schema = 'mart',
     materialized = 'incremental',
     incremental_strategy = 'merge',
     unique_key = 'surrogate_key'
@@ -29,11 +30,11 @@ where event_timestamp > '{{max_load_timestamp}}'
 union all
 
 select
-valid_from                          as event_timestamp
+valid_from                                                                   as event_timestamp
 , account_id_hashed
 , account_type
 , user_id_hashed
-, status                            as event_type
+, status                                                                     as event_type
 
 from {{ this }}
 
@@ -46,13 +47,8 @@ select
 account_id_hashed
 , first_value(user_id_hashed ignore nulls) over (partition by account_id_hashed order by event_timestamp rows between unbounded preceding and unbounded following) as user_id_hashed
 , first_value(account_type ignore nulls) over (partition by account_id_hashed order by event_timestamp rows between unbounded preceding and unbounded following)  as account_type
-
-, case 
-    when event_type in ('Opened', 'Reopened') then 'Open'
-    when event_type = 'Closed' then 'Closed'
-  end                                                                                      as status
-
-, event_timestamp                                                                          as valid_from
+, event_type                                                                                   as status
+, event_timestamp                                                                              as valid_from
 , lead(event_timestamp) over (partition by account_id_hashed order by event_timestamp)         as valid_to
 from all_events
 )
@@ -65,10 +61,10 @@ select
 , account_type
 , status
 , valid_from
-, coalesce(valid_to, '9999-01-01 00:00:00') as valid_to
-, if(valid_to is null, true, false) as is_current
+, coalesce(valid_to, '9999-01-01 00:00:00')                                  as valid_to
+, if(valid_to is null, true, false)                                          as is_current
 , if(valid_to is null, 'Indicates the record represents the latest version of the natural key', 'Indicates the record is not the latest version') as is_current_description
 
 -- meta
-, current_timestamp() as _processed_timestamp
+, {{add_metadata()}}  
 from scd2

@@ -1,0 +1,19 @@
+models:
+  - name: int_events
+    description: This intermediate view unions together created, closed and reopened account events. 
+    columns:
+      - name: event_timestamp
+        description: Timestamp for created, closed and reopened events.
+        tests:
+          - not_null
+      - name: account_id_hashed
+      - name: account_type
+      - name: user_id_hashed
+      - name: event_type
+        description: Indicates the nature of the event, Opened, Closed or Reopened.
+        tests:
+          - accepted_values:
+              values:
+                - Opened
+                - Closed
+                - Reopened

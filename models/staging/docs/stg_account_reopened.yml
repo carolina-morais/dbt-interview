@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: stg_account_reopened
+    description: This staging table contains records of account reopened events. 
+    columns:
+      - name: surrogate_key
+        description: A generated unique ID based on hashed account ID and reopened_ts.
+        tests:
+          - unique:
+              where: reopened_ts >= timestamp(date_sub(current_date, interval 2 day))
+          - not_null:
+              where: reopened_ts >= timestamp(date_sub(current_date, interval 2 day))
+      - name: reopened_ts
+        description: The timestamp indicating when the account was reopened. 
+        tests:
+          - not_null:
+              where: reopened_ts >= timestamp(date_sub(current_date, interval 2 day))
+      - name: account_id_hashed
+        description: A hashed identifier for the account. 
+        tests:
+          - not_null:
+              where: reopened_ts >= timestamp(date_sub(current_date, interval 2 day))

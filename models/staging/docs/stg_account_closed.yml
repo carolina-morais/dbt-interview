@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: stg_account_closed
+    description: This staging table records events in which accounts are closed. 
+    columns:
+      - name: surrogate_key
+        description: A generated unique ID based on hashed account ID and closed_ts.
+        tests:
+          - unique:
+              where: closed_ts >= timestamp(date_sub(current_date, interval 2 day))
+          - not_null:
+              where: closed_ts >= timestamp(date_sub(current_date, interval 2 day))
+      - name: closed_ts
+        description: The timestamp denoting when the account was closed.
+        tests:
+          - not_null:
+              where: closed_ts >= timestamp(date_sub(current_date, interval 2 day))
+      - name: account_id_hashed
+        description: A hashed unique identifier for the account.
+        tests:
+          - not_null:
+              where: closed_ts >= timestamp(date_sub(current_date, interval 2 day))

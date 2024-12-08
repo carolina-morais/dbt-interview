@@ -1,0 +1,102 @@
+version: 2
+
+models:
+  - name: user_activity_by_day
+    description: This table records daily activity for users with open accounts.
+    columns:
+      - name: surrogate_key
+        description: A generated unique ID based on user_id_hashed and date_day.
+        tests: 
+          - unique:
+              where: date_day >= date_sub(current_date, interval 2 day)
+          - not_null:
+              where: date_day >= date_sub(current_date, interval 2 day)
+      - name: date_day
+        tests:
+          - not_null
+      - name: user_id_hashed
+        tests:
+          - not_null
+      - name: is_account_open
+        description: Indicates if the user had an open account on this date (1 = open, 0 = closed).
+      - name: no_of_transactions
+        description: The number of transactions the user performed on this day.
+      - name: date_of_last_activity_in_last_7_days
+        description: The most recent activity date within the previous 7 days.
+      - name: is_active_in_last_7_days
+        description: Indicates if the user was active in the last 7 days (1 = active, 0 = inactive).
+
+unit_tests:
+  - name: test_user_activity_by_day_incremental_logic
+    description: |
+      Scenario: Verify incremental processing of user_activity_by_day.
+      Given data spanning multiple dates, including some dates prior to the incremental date.
+      When running in incremental mode starting from 2024-11-01.
+      Then it should only process data on or after the incremental date, while using previous run data for continuity.
+
+    model: user_activity_by_day
+    overrides:
+      macros:
+        is_incremental: true  # Force the test to think it's an incremental run
+      vars:
+        start_date: "2024-11-01"  # Incremental date from which we process new data
+        end_date: "2024-11-02" 
+    given:
+      # Mock dim_date with a few dates
+      - input: ref('dim_date')
+        format: dict
+        rows:
+          - {date_day: '2024-10-31'}
+          - {date_day: '2024-11-01'}
+          - {date_day: '2024-11-02'}
+          - {date_day: '2024-11-03'}
+          - {date_day: '2024-11-04'}
+          - {date_day: '2024-11-05'}
+
+      # Mock dim_account table
+      - input: ref('dim_account')
+        format: dict
+        rows:
+          # user_1 has an open account covering these dates
+          - {user_id_hashed: user_1, account_id_hashed: acct_1, status: 'Opened', valid_from: '2024-10-30 00:00:00', valid_to: '9999-12-31 23:59:59'}
+          # user_2 has an open account starting on 2024-11-01
+          - {user_id_hashed: user_2, account_id_hashed: acct_2, status: 'Opened', valid_from: '2024-11-01 00:00:00', valid_to: '9999-12-31 23:59:59'}
+
+          - {user_id_hashed: user_3, account_id_hashed: acct_3, status: 'Opened', valid_from: '2024-09-01 00:00:00', valid_to: '9999-12-31 23:59:59'}
+          - {user_id_hashed: user_4, account_id_hashed: acct_4, status: 'Opened', valid_from: '2024-09-01 00:00:00', valid_to: '9999-12-31 23:59:59'}
+
+      # Mock transactions prior and after incremental date
+      - input: ref('stg_account_transactions')
+        format: dict
+        rows:
+          # Transactions before incremental date
+          - {transaction_date: '2024-10-31', account_id_hashed: acct_1, no_of_transactions: 5}
+          # Transactions on and after incremental date
+          - {transaction_date: '2024-11-01', account_id_hashed: acct_1, no_of_transactions: 2}
+          - {transaction_date: '2024-11-02', account_id_hashed: acct_2, no_of_transactions: 3}
+
+          - {transaction_date: '2024-11-02', account_id_hashed: acct_3, no_of_transactions: 2}
+
+      # Mock existing incremental table state ("this") to simulate previous run
+      # Assume we previously had data on 2024-10-31
+      - input: this
+        format: dict
+        rows:
+          - {date_day: '2024-10-31', user_id_hashed: user_1, is_account_open: 1, no_of_transactions: 5, date_of_last_activity_in_last_7_days: '2024-10-31', is_active_in_last_7_days: 1}
+          - {date_day: '2024-10-31', user_id_hashed: user_3, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: '2024-10-24', is_active_in_last_7_days: 1}
+          - {date_day: '2024-10-31', user_id_hashed: user_4, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: '2024-10-25', is_active_in_last_7_days: 1}
+    expect:
+      format: dict
+      rows:
+        # We expect to see rows for 2024-11-01 and onward only, because of incremental mode
+        - {date_day: '2024-11-01', user_id_hashed: user_1, is_account_open: 1, no_of_transactions: 2, date_of_last_activity_in_last_7_days: '2024-11-01', is_active_in_last_7_days: 1}
+        - {date_day: '2024-11-02', user_id_hashed: user_1, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: '2024-11-01', is_active_in_last_7_days: 1}
+        # Note that even though user_2 had no previous activity, now they appear starting from 2024-11-02
+        - {date_day: '2024-11-01', user_id_hashed: user_2, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: null, is_active_in_last_7_days: 0}
+        - {date_day: '2024-11-02', user_id_hashed: user_2, is_account_open: 1, no_of_transactions: 3, date_of_last_activity_in_last_7_days: '2024-11-02', is_active_in_last_7_days: 1}
+
+        - {date_day: '2024-11-01', user_id_hashed: user_3, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: null, is_active_in_last_7_days: 0}
+        - {date_day: '2024-11-02', user_id_hashed: user_3, is_account_open: 1, no_of_transactions: 2, date_of_last_activity_in_last_7_days: '2024-11-02', is_active_in_last_7_days: 1}
+
+        - {date_day: '2024-11-01', user_id_hashed: user_4, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: '2024-10-25', is_active_in_last_7_days: 1}
+        - {date_day: '2024-11-02', user_id_hashed: user_4, is_account_open: 1, no_of_transactions: 0, date_of_last_activity_in_last_7_days: null, is_active_in_last_7_days: 0}

@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: A date dimension table containing date level attributes.
+    columns:
+      - name: date_day
+        description: The calendar date representing a single day.
+        tests:
+          - unique
+          - not_null
+      - name: date_week
+        description: The start date of the week - week starting from Sunday.
+      - name: date_week_iso
+        description: The start date of the week - week starting from Monday.

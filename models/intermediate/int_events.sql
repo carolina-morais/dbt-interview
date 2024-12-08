@@ -1,6 +1,6 @@
 {{
   config(
-    materialized = 'table',
+    materialized = 'view',
     )
 }}
 
@@ -10,6 +10,8 @@ created_ts                              as event_timestamp
 , account_type
 , user_id_hashed
 , 'Opened'                             as event_type
+, {{add_metadata()}}  
+
 from {{ ref('stg_account_created') }}
 
 union all
@@ -20,6 +22,7 @@ closed_ts                              as event_timestamp
 , null                                 as account_type
 , null                                 as user_id_hashed
 , 'Closed'                             as event_type
+, {{add_metadata()}}  
 from {{ ref('stg_account_closed') }}
 
 union all
@@ -30,4 +33,5 @@ reopened_ts                            as event_timestamp
 , null                                 as account_type
 , null                                 as user_id_hashed
 , 'Reopened'                           as event_type
+, {{add_metadata()}}  
 from {{ ref('stg_account_reopened') }}
